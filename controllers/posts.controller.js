@@ -1,167 +1,133 @@
-const {filterObj} = require('../utils/filterObj');
+const { filterObj } = require("../utils/filterObj");
 //Model
-const {Post} = require('../models/post.model');
+const { Post } = require("../models/post.model");
+const { User } = require("../models/user.model");
+const { Comment } = require("../models/comment.model");
 
+const { AppError } = require("../utils/AppError");
+const { catchAsync } = require("../utils/catchAsync");
 
-exports.getAllPost = async (req, res) => {
-    try{
-        const posts = await Post.findAll();
+exports.getAllPost = catchAsync(async (req, res) => {
+  const posts = await Post.findAll({
+    where: { status: "active" },
+    include: [{ model: User }, { model: Comment, include: [{ model: User }] }],
+  });
 
-        res.status(200).json({
-            status: 'sucess',
-            data: {
-                posts
-            }
-        });
+  res.status(200).json({
+    status: "sucess",
+    data: {
+      posts,
+    },
+  });
+});
 
-    }catch{
-        console.log(err);
-    }
-        
-};
+exports.getPostById = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  const post = await Post.findOne({
+    where: { id, status: "active" },
+    include: [{ model: User }],
+  });
 
-exports.getPostById = async (req, res) => {
-    try{
-        const { id } = req.params;
-        const post = await Post.findOne({where:{id}})
+  if (!post) {
+    return next(new AppError(404, "Post no found whit given ID"));
+  }
 
-        if(!post){
-            res.status(404).json({
-                status:'error', 
-                message:'Post no found whit given ID'
-            });
-            return;
-        }
+  res.status(200).json({
+    status: "Sucess",
+    data: {
+      post,
+    },
+  });
+});
 
-        res.status(200).json({
-            status: 'Sucess',
-            data: {
-                post,
-            }
-        })
-    }catch{
-        console.log(err);
-    }
-};
+exports.savePost = catchAsync(async (req, res, next) => {
+  const { title, content, userId } = req.body;
 
-exports.savePost = async (req, res) => {
-    try{
-        const {title, content, author} = req.body;
+  if (
+    !title ||
+    !content ||
+    !userId ||
+    title.length === 0 ||
+    content.length === 0 ||
+    userId.length === 0
+  ) {
+    return next(400, "Must a invalid title or content or author");
+  }
 
-        if(!title || !content || !author || title.length === 0 || content.length === 0 || author.length === 0){
-            res.status(400).json({
-                status: 'error',
-                message: 'Must a invalid title or content or author'
-            });
-            return;
-        }
+  const newPost = await Post.create({ title, content, userId });
 
-        const newPost = await Post.create({title,content,author});
+  res.status(201).json({
+    status: "Success",
+    data: { newPost },
+  });
+});
 
-        res.status(201).json({
-            status: 'Success',
-            data: { newPost }
-        })
+exports.updatePostPut = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
 
-    }catch{
-        console.log(err)
-    }
-    
-};
+  const { title, content, userId } = req.body;
 
-exports.updatePostPut = async (req, res) => {
-    try{
-        const { id } = req.params;
+  if (
+    !title ||
+    !content ||
+    !userId ||
+    title.length === 0 ||
+    content.length === 0 ||
+    userId.length === 0
+  ) {
+    return next(new AppError(400, "Must a invalid title or content"));
+  }
 
-        const { title, content, author } = req.body;
+  const updatePost = await Post.findOne({ where: { id } });
 
-        if(!title || !content || !author || title.length === 0 || content.length === 0 || author.length === 0){
-            res.status(400).json({
-                status: 'error',
-                message: 'Must a invalid title or content or author'
-            });
-            return;
-        }
+  if (!updatePost) {
+    return next(new AppError(404, "Cant this post, invalid ID"));
+  }
 
-        const updatePost = await Post.findOne({where:{id}})
+  await updatePost.update({
+    title,
+    content,
+    userId,
+  });
 
-        if(!updatePost){
-            res.status(404).json({
-                status: 'error',
-                message: 'Cant this post, invalid ID'
-            })
-            return;
-        }
+  res.status(201).json({
+    status: "Success",
+    message: "Update success",
+  });
+});
 
-         await updatePost.update({
-            title,
-            content,
-            author
-        })
+exports.updatePostPatch = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
 
-        res.status(201).json({
-            status: 'Success',
-            message: 'Update success'
-        })
+  const data = filterObj(req.body, "title", "content", "userId");
 
-    }catch{
-        console.log(err)
-    }
-    
-};
+  if (Object.keys(data).length === 0) {
+    return next(new AppError(404, "Data is empty"));
+  }
 
-exports.updatePostPatch = async (req, res) => {
-    try{
-        const { id } = req.params;
+  const post = await Post.findOne({ where: { id } });
 
-        const data = filterObj(req.body, 'title', 'content', 'author');
+  if (!post) {
+    return next(new AppError(404, "Cant update post with given Id"));
+  }
 
-        if(Object.keys(data).length === 0){
-            res.status(404).json({
-                status: 'error',
-                message:'Data is null'
-            })
-        }
+  await post.update({ ...data });
 
-        const post = await Post.findOne({where:{id}});
+  res.status(204).json({ status: "Success" });
+});
 
-        if(!post){
-            res.status(404).json({
-                status: 'error',
-                message: 'Cant update post with given Id'
-            })
-            return;
-        }
+exports.deletePost = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const post = await Post.findOne({ where: { id, status: "active" } });
 
-        await post.update({...data });
+  if (!post) {
+    return next(new AppError(404, "Cant delete post whit given ID"));
+  }
 
-        res.status(204).json({status:'Success'});
+  await post.update({ status: "deleted" });
 
-    }catch{
-        console.log(err)
-    }
-};
-
-exports.deletePost = async (req, res) => {
-    try{
-        const { id } = req.params;
-        const post = await Post.findOne({where:{id}})
-
-        if(!post){
-            res.status(404).json({
-                status:'error',
-                message: 'Cant delete post whit given ID'
-            })
-            return;
-        }
-
-        await post.destroy();
-
-        res.status(200).json({
-            status: 'Success',
-            data:{ post }
-        });
-    }catch{
-        console.log(err)
-    }
-};
+  res.status(200).json({
+    status: "Success",
+    data: { post },
+  });
+});

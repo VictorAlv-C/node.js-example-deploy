@@ -1,162 +1,133 @@
+const { filterObj } = require("../utils/filterObj");
 
-const { filterObj } = require('../utils/filterObj')
+const { User } = require("../models/user.model");
+const { Post } = require("../models/post.model");
+const { Comment } = require("../models/comment.model");
 
-const {User} = require('../models/user.model');
+const { catchAsync } = require("../utils/catchAsync");
+const { AppError } = require("../utils/AppError");
 
-exports.getAllUsers = async (req, res) => {
-    try{
-        const users = await User.findAll({where:{status: 'active'}})
-        res.status(200).json({
-        stautus: 'Success',
-        data: { users }
-    })
-    }catch{
-        console.log('Error find all Users')
-    }
-};
+exports.getAllUsers = catchAsync(async (req, res) => {
+  const users = await User.findAll({
+    where: { status: "active" },
+    include: [
+      { model: Post, include: [{ model: Comment }] },
+      { model: Comment, include: [{ model: Post }] },
+    ],
+  });
+  res.status(200).json({
+    stautus: "Success",
+    data: { users },
+  });
+});
 
-exports.getUserByID = async (req, res) => {
-    try{
-        const { id } = req.params;
-        const user = await User.findOne({where:{id, status:'active'}});
+exports.getUserByID = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  const user = await User.findOne({
+    where: { id, status: "active" },
+    include: [{ model: Post }, { model: Comment, include: [{ model: Post }] }],
+  });
 
-        if(!user){
-            res.status(404).json({
-                stautus: 'error',
-                message: 'Cant get user whith given ID'
-            })
-            return;
-        }
+  if (!user) {
+    return next(new AppError(404, "Cant get user whith given ID"));
+  }
 
-        res.status(201).json({
-            stautus: 'Success',
-            data: {user}
-        })
+  res.status(201).json({
+    stautus: "Success",
+    data: { user },
+  });
+});
 
-    }catch{
-        console.log('Error find by ID')
-    }
-    
-};
+exports.saveUser = catchAsync(async (req, res, next) => {
+  const { name, age, email } = req.body;
 
-exports.saveUser = async (req, res) => {
-   try{
-        const { name, age, email } = req.body;
+  if (
+    !name ||
+    !age ||
+    !email ||
+    name.length === 0 ||
+    age.length === 0 ||
+    email.length === 0
+  ) {
+    return next(new AppError(404, "Falta algun campo o esta vacio"));
+  }
 
-        if(!name || !age || !email || name.length === 0 || age.length === 0 || email.length === 0){
-            res.status(404).json({
-                status: 'error',
-                message: 'Falta algun campo o esta vacio'
-            })
-            return;
-        }
+  await User.create({
+    name,
+    age,
+    email,
+  });
 
-        await User.create({
-            name,
-            age,
-            email
-        });
+  res.status(201).json({
+    stautus: "Success",
+    message: "Se agrego correctamente",
+  });
+});
 
-        res.status(201).json({
-            stautus: 'Success',
-            message: 'Se agrego correctamente'
-        })
-   }catch{
-       console.log('Error save user')
-   }
-};
+exports.updateUserPut = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  const { name, age, email } = req.body;
 
-exports.updateUserPut = async (req, res) => {
-    try{
-        const { id } = req.params;
-        const{name, age, email} = req.body;
+  if (
+    !name ||
+    !age ||
+    !email ||
+    name.length === 0 ||
+    age.length === 0 ||
+    email.length === 0 ||
+    id === -1
+  ) {
+    return next(new AppError(404, "Information or Id incorrects"));
+  }
 
-        if(!name || !age || !email || name.length === 0 || age.length === 0 || email.length === 0 || id === -1){
-            res.status(404).json({
-                status: 'erros',
-                message: 'Information or Id incorrects'
-            })
-            return;
-        }
+  const user = await User.findOne({ where: { id, status: "active" } });
 
-        const user = await User.findOne({where:{id,status:'active'}});
+  if (!user) {
+    return next(new AppError(404, "Cant update user with given ID"));
+  }
 
-        if(!user){
-            res.status(404).json({
-                status: 'error',
-                message: 'Cant update user with given ID'
-            })
-            return;
-        }
-        
-        await user.update({name,age,email})
+  await user.update({ name, age, email });
 
-        res.status(201).json({
-            status: 'Success',
-            message: 'Update correct',
-            data:{user}
-        })
-    }catch{
-        console.log('Error Update User')
-    }
-};
+  res.status(201).json({
+    status: "Success",
+    message: "Update correct",
+    data: { user },
+  });
+});
 
-exports.updateUserPatch = async (req, res) => {
-   try{
-        const { id } = req.params;
-        const data = filterObj(req.body, 'name', 'age', 'email');
-        const user = await User.findOne({where:{id, status: 'active'}});
+exports.updateUserPatch = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  const data = filterObj(req.body, "name", "age", "email");
+  const user = await User.findOne({ where: { id, status: "active" } });
 
-        if(!user){
-            res.status(404).json({
-                status: 'error',
-                message: 'Cant update user with given Id'
-            })
-            return;
-        }
+  if (!user) {
+    return next(new AppError(404, "Cant update user with given Id"));
+  }
 
-        if(Object.keys(data).length === 0){
-            res.status(404).json({
-                status: 'error',
-                message:'Data is null'
-            })
-        }
+  if (Object.keys(data).length === 0) {
+    return next(new AppError(404, "Data is empty"));
+  }
 
-        await user.update({...data})
+  await user.update({ ...data });
 
-        res.status(201).json({
-            status: 'Success',
-            message: 'Correct'
-        })
-   }catch{
-       console.log('Error update user')
-   }
+  res.status(201).json({
+    status: "Success",
+    message: "Correct",
+  });
+});
 
+exports.deleteUser = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  const user = await User.findOne({ where: { id, status: "active" } });
 
-}; 
+  if (!user) {
+    return next(new AppError(404, "Cant delete user with given id"));
+  }
 
-exports.deleteUser = async (req, res) => {
-    try{
-        const {id} = req.params;
-        const user = await User.findOne({where:{id, status:'active'}});
+  await user.update({ status: "deleted" });
 
-        if(!user){
-            res.status(404).json({
-                status: 'error',
-                message: 'Cant delete user with given id'
-            })
-            return;
-        }
-
-        await user.update({status: 'deleted'});
-
-        res.status(200).json({
-            status: 'Success',
-            message:'Deleted success'
-        })
-
-    }catch{
-        console.log('Error delete User')
-    }
-
-};
+  res.status(200).json({
+    status: "Success",
+    message: "Deleted success",
+  });
+});

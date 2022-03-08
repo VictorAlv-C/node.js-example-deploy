@@ -1,19 +1,20 @@
+const { status } = require("express/lib/response");
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../utils/database");
 
-const Post = sequelize.define("post", {
+const Comment = sequelize.define("comment", {
   id: {
     type: DataTypes.INTEGER,
-    autoIncrement: true,
     primaryKey: true,
+    autoIncrement: true,
     allowNull: false,
   },
-  title: {
-    type: DataTypes.STRING(100),
-    allowNull: false,
-  },
-  content: {
+  text: {
     type: DataTypes.STRING(255),
+    allowNull: false,
+  },
+  postId: {
+    type: DataTypes.INTEGER,
     allowNull: false,
   },
   userId: {
@@ -26,4 +27,4 @@ const Post = sequelize.define("post", {
   },
 });
 
-module.exports = { Post };
+module.exports = { Comment };
