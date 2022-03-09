@@ -4,7 +4,8 @@
   "description": "This is a basic example from express ",
   "main": "app.js",
   "scripts": {
-    "start": "nodemon server.js"
+    "start": "node server.js",
+    "start:dev": "nodemon server.js"
   },
   "keywords": [
     "nodejs",
