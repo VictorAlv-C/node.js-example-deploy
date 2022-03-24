@@ -32,18 +32,11 @@ exports.getCommentByID = catchAsync(async (req, res, next) => {
 });
 
 exports.saveComment = catchAsync(async (req, res) => {
-  const { text, userId, postId } = req.body;
-  if (
-    !text ||
-    !userId ||
-    !postId ||
-    text.length === 0 ||
-    userId.length === 0 ||
-    postId.length === 0
-  ) {
+  const { text, postId } = req.body;
+  if (!text || !postId || text.length === 0 || postId.length === 0) {
     return next(new AppError(404, "Some properties is empty or dont exist"));
   }
-  await Comment.create({ text, userId, postId });
+  await Comment.create({ text, postId, userId: req.currentUser.id });
   res.status(200).json({
     status: "Success",
     message: "comment made successfully",

@@ -1,3 +1,7 @@
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const dotenv = require("dotenv");
+
 const { filterObj } = require("../utils/filterObj");
 
 const { User } = require("../models/user.model");
@@ -6,6 +10,7 @@ const { Comment } = require("../models/comment.model");
 
 const { catchAsync } = require("../utils/catchAsync");
 const { AppError } = require("../utils/AppError");
+dotenv.config({ path: "./config.env" });
 
 exports.getAllUsers = catchAsync(async (req, res) => {
   const users = await User.findAll({
@@ -26,12 +31,12 @@ exports.getUserByID = catchAsync(async (req, res, next) => {
   const user = await User.findOne({
     where: { id, status: "active" },
     include: [{ model: Post }, { model: Comment, include: [{ model: Post }] }],
+    attributes: { exclude: ["password"] },
   });
 
   if (!user) {
     return next(new AppError(404, "Cant get user whith given ID"));
   }
-
   res.status(201).json({
     stautus: "Success",
     data: { user },
@@ -39,28 +44,35 @@ exports.getUserByID = catchAsync(async (req, res, next) => {
 });
 
 exports.saveUser = catchAsync(async (req, res, next) => {
-  const { name, age, email } = req.body;
+  const { name, age, email, password } = req.body;
 
   if (
     !name ||
     !age ||
     !email ||
+    !password ||
     name.length === 0 ||
     age.length === 0 ||
     email.length === 0
   ) {
-    return next(new AppError(404, "Falta algun campo o esta vacio"));
+    return next(new AppError(404, "Some propertie is empty"));
   }
 
-  await User.create({
+  const salt = await bcrypt.genSalt(12);
+  const passwordProtec = await bcrypt.hash(password, salt);
+
+  const user = await User.create({
     name,
     age,
     email,
+    password: passwordProtec,
   });
+
+  user.password = undefined;
 
   res.status(201).json({
     stautus: "Success",
-    message: "Se agrego correctamente",
+    data: { user },
   });
 });
 
@@ -129,5 +141,23 @@ exports.deleteUser = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: "Success",
     message: "Deleted success",
+  });
+});
+
+exports.loginValidate = catchAsync(async (req, res, next) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ where: { email, status: "active" } });
+
+  if (!user || !(await bcrypt.compare(password, user.password))) {
+    return next(new AppError(400, "Invalid Credentials"));
+  }
+
+  const token = await jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRESIN,
+  });
+
+  res.status(200).json({
+    status: "Success",
+    data: { token },
   });
 });

@@ -6,6 +6,10 @@ const {
   saveComment,
 } = require("../controllers/comments.controller");
 
+const { validateSession } = require("../middlewares/auth.middleware");
+
+routes.use(validateSession);
+
 routes.get("/", getAllComments);
 
 routes.get("/:id", getCommentByID);
